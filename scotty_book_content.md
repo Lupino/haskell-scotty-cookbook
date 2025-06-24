@@ -56,44 +56,61 @@ brew install haskell-stack
 
 #### 创建新项目
 
-```bash
-# 创建新的 Scotty 项目
-stack new my-scotty-app
-cd my-scotty-app
+使用 stack 创建 scotty 项目
 
-# 编辑 package.yaml 添加 Scotty 依赖
+```bash
+stack new hello-scotty
+cd hello-scotty
+
+```
+
+
+生成的项目结构如下:
+
+```
+hello-scotty/
+├── app
+│   └── Main.hs          -- 应用入口点
+├── CHANGELOG.md
+├── LICENSE
+├── package.yaml         -- 项目配置
+├── README.md
+├── Setup.hs
+├── src
+│   ├── Lib.hs           -- 主要库代码
+├── stack.yaml           -- Stack 配置
+└── test
+    └── Spec.hs          -- 测试文件
+```
+
+编辑 package.yaml 添加 scotty 依赖
+
+**package.yaml**
+```yaml
+dependencies:
+- base >= 4.7 && < 5
+- scotty
+- aeson
+- text
 ```
 
 ### 1.3 Hello World 项目
 
 创建你的第一个 Scotty 应用：
 
-**package.yaml**
-```yaml
-name: hello-scotty
-version: 0.1.0.0
-
-dependencies:
-- base >= 4.7 && < 5
-- scotty
-- text
-
-executables:
-  hello-scotty-exe:
-    main: Main.hs
-    source-dirs: app
-```
-
-**app/Main.hs**
+**app/Lib.hs**
 ```haskell
 {-# LANGUAGE OverloadedStrings #-}
-module Main where
+module Lib
+  ( someFunc
+  ) where
 
-import Web.Scotty
-import Data.Text.Lazy (Text)
+import           Data.Aeson     (object, (.=))
+import           Data.Text.Lazy (Text)
+import           Web.Scotty
 
-main :: IO ()
-main = do
+someFunc :: IO ()
+someFunc = do
     putStrLn "Starting server on port 3000..."
     scotty 3000 routes
 
@@ -120,23 +137,25 @@ stack build
 stack exec hello-scotty-exe
 ```
 
-### 1.4 项目结构
+运行成功输出如下：
 
-推荐的项目结构：
-
+```bash
+$ stack exec hello-scotty-exe
+Starting server on port 3000...
+Setting phasers to stun... (port 3000) (ctrl-c to quit)
 ```
-my-scotty-app/
-├── app/
-│   └── Main.hs          -- 应用入口点
-├── src/
-│   ├── Lib.hs           -- 主要库代码
-│   ├── Routes/          -- 路由模块
-│   ├── Models/          -- 数据模型
-│   ├── Controllers/     -- 控制器逻辑
-│   └── Utils/           -- 工具函数
-├── test/                -- 测试文件
-├── package.yaml         -- 项目配置
-└── stack.yaml          -- Stack 配置
+
+打开另一个终端，用 curl 进行测试
+
+```bash
+$ curl http://127.0.0.1:3000
+Welcome to Scotty!
+
+$ curl http://127.0.0.1:3000/greet/Lupino
+Hello, Lupino!
+
+$ curl http://127.0.0.1:3000/api/status
+{"service":"hello-scotty","status":"ok"}
 ```
 
 ---
