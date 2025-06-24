@@ -36,8 +36,11 @@ library
   build-depends:
       aeson
     , base >=4.7 && <5
+    , bytestring
+    , http-types
     , scotty
     , text
+    , wai-extra
   default-language: Haskell2010
 
 executable hello-scotty-exe
@@ -52,9 +55,12 @@ executable hello-scotty-exe
   build-depends:
       aeson
     , base >=4.7 && <5
+    , bytestring
     , hello-scotty
+    , http-types
     , scotty
     , text
+    , wai-extra
   default-language: Haskell2010
 
 test-suite hello-scotty-test
@@ -70,7 +76,10 @@ test-suite hello-scotty-test
   build-depends:
       aeson
     , base >=4.7 && <5
+    , bytestring
     , hello-scotty
+    , http-types
     , scotty
     , text
+    , wai-extra
   default-language: Haskell2010

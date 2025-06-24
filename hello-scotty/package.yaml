@@ -24,6 +24,9 @@ dependencies:
 - scotty
 - aeson
 - text
+- http-types
+- wai-extra
+- bytestring
 
 ghc-options:
 - -Wall

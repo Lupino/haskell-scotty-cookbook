@@ -116,19 +116,19 @@ someFunc = do
 
 routes :: ScottyM ()
 routes = do
-    -- 基本路由
-    get "/" $ text "Welcome to Scotty!"
+  -- 基本路由
+  get "/" $ text "Welcome to Scotty!"
 
-    -- 带参数的路由
-    get "/greet/:name" $ do
-        name <- param "name"
-        text $ "Hello, " <> name <> "!"
+  -- 带参数的路由
+  get "/greet/:name" $ do
+    name <- pathParam "name"
+    text $ "Hello, " <> name <> "!"
 
-    -- JSON 响应
-    get "/api/status" $ json $ object
-        [ "status" .= ("ok" :: Text)
-        , "service" .= ("hello-scotty" :: Text)
-        ]
+  -- JSON 响应
+  get "/api/status" $ json $ object
+    [ "status" .= ("ok" :: Text)
+    , "service" .= ("hello-scotty" :: Text)
+    ]
 ```
 
 运行项目：
@@ -166,82 +166,172 @@ $ curl http://127.0.0.1:3000/api/status
 
 Scotty 提供了简洁的路由定义语法，支持所有标准 HTTP 方法：
 
+使用到的方法如 get, post, put, delete, options 等方法
+
+格式: method route action
+
+- method 为 get, post, put, delete, options 等方法
+- route 为 完整的 pathname, 带参数的 pathname, 正则 pathname, 通配符 等
+- action 为 操作函数
+
+添加以下代码到 app/Lib.hs 里面
+
+**app/Lib.hs**
 ```haskell
 {-# LANGUAGE OverloadedStrings #-}
-import Web.Scotty
 
 routes :: ScottyM ()
 routes = do
-    -- GET 请求
-    get "/users" getAllUsers
-    get "/users/:id" getUserById
+  -- 基本路由
+  get "/" $ text "Welcome to Scotty!"
 
-    -- POST 请求
-    post "/users" createUser
+  -- 带参数的路由
+  get "/greet/:name" $ do
+    name <- pathParam "name"
+    text $ "Hello, " <> name <> "!"
 
-    -- PUT 请求
-    put "/users/:id" updateUser
+  -- JSON 响应
+  get "/api/status" $ json $ object
+    [ "status" .= ("ok" :: Text)
+    , "service" .= ("hello-scotty" :: Text)
+    ]
 
-    -- DELETE 请求
-    delete "/users/:id" deleteUser
+  -- POST 请求
+  post "/some_path" $ text "This is a POST method to /some_path"
 
-    -- 通配符路由
-    get "/static/*" serveStatic
+  -- PUT 请求
+  put "/some_path" $ text "This is a PUT method to /some_path"
 
-    -- 正则表达式路由
-    get (regex "^/api/v[0-9]+/users$") apiUsers
+  -- DELETE 请求
+  delete "/some_path" $ text "This is a DELETE method to /some_path"
+```
 
-getAllUsers :: ActionM ()
-getAllUsers = text "All users"
+编译运行，然后用 curl 测试
 
-getUserById :: ActionM ()
-getUserById = do
-    userId <- param "id"
-    text $ "User ID: " <> userId
+```bash
+$ curl -XPOST http://127.0.0.1:3000/some_path
+This is a POST method to /some_path
+
+$ curl -XPUT http://127.0.0.1:3000/some_path
+This is a PUT method to /some_path
+
+$ curl -XDELETE http://127.0.0.1:3000/some_path
+This is a DELETE method to /some_path
 ```
 
 ### 2.2 参数处理
 
 #### 路径参数
 
+有时候我们需要将参数放到请求的链接上，我们可以通过 `pathParam` 来获取
+
 ```haskell
--- URL: /users/123/posts/456
-get "/users/:userId/posts/:postId" $ do
-    userId <- param "userId"
-    postId <- param "postId"
+  -- URL: /users/123/posts/456
+  get "/users/:userId/posts/:postId" $ do
+    userId <- pathParam "userId"
+    postId <- pathParam "postId"
     text $ "User: " <> userId <> ", Post: " <> postId
+```
+
+将代码添加都 routes 里面，编译运行，然后 curl 测试:
+
+```bash
+$ curl http://127.0.0.1:3000/users/123/posts/231
+User: 123, Post: 231
 ```
 
 #### 查询参数
 
+通过 `queryParam` 来获取请求的参数,
+如果参数是可选的话用 `catch` 来捕获异常，然后给一个默认值。
+
+
 ```haskell
--- URL: /search?q=haskell&limit=10
-get "/search" $ do
-    query <- param "q"           -- 必需参数
-    limit <- param "limit" `rescue` const (return "20")  -- 可选参数
-    text $ "Query: " <> query <> ", Limit: " <> limit
+import           Control.Exception (SomeException)
+
+  -- URL: /search?q=haskell&limit=10
+  get "/search" $ do
+      query <- queryParam "q"           -- 必需参数
+      limit <- queryParam "limit" `catch` (\(_ :: SomeException) -> return "20")  -- 可选参数
+      text $ "Query: " <> query <> ", Limit: " <> limit
+```
+
+将代码添加到 routes 里面，并从 `Control.Exception` 导入 `SomeException`。
+编译运行，然后 curl 测试:
+
+```bash
+$ curl 'http://127.0.0.1:3000/search?q=haskell&limit=10'
+Query: haskell, Limit: 10
+
+$ curl 'http://127.0.0.1:3000/search?q=haskell'
+Query: haskell, Limit: 20
 ```
 
 #### 安全的参数解析
 
-```haskell
-import Control.Monad.IO.Class (liftIO)
-import Text.Read (readMaybe)
+有时候我们需要一个数字的参数，但用户传了一个文本进来，这时候我们需要处理以下：
 
-get "/users/:id" $ do
-    idText <- param "id"
-    case readMaybe idText of
-        Nothing -> do
-            status status400
-            text "Invalid user ID"
-        Just userId -> do
-            -- 处理有效的用户ID
-            text $ "User ID: " <> show (userId :: Int)
+```haskell
+import           Network.HTTP.Types.Status
+import           Text.Read                 (readMaybe)
+import           Data.Text.Lazy            (pack)
+
+  get "/users/:id" $ do
+      idText <- pathParam "id"
+      case readMaybe idText of
+          Nothing -> do
+              status status400
+              text "Invalid user ID"
+          Just userId -> do
+              -- 处理有效的用户ID
+              text $ "User ID: " <> pack (show (userId :: Int))
+```
+
+添加`http-types` 到 package.yml 的 dependencies 上，
+将代码添加到 routes 里面, 编译运行，然后 curl 测试:
+
+
+```bash
+$ curl 'http://127.0.0.1:3000/users/1000'
+User ID: 1000
+
+$ curl 'http://127.0.0.1:3000/users/str10'
+Invalid user ID
 ```
 
 ### 2.3 请求体处理
 
+#### 表单数据
+
+提交数据，做常用的就是表单提交，表单提交的数据可以通过 `formParam` 来获取.
+如果参数是可选的话用 `catch` 来捕获异常，然后给一个默认值。
+
+```haskell
+  post "/login" $ do
+    username <- formParam "username" :: ActionM Text
+    password <- formParam "password" :: ActionM Text
+    -- 验证逻辑
+    if username == "admin" && password == "secret"
+      then text "Login successful"
+      else do
+        status status401
+        text "Invalid credentials"
+```
+
+将代码添加到 routes 里面, 编译运行，然后 curl 测试:
+
+```bash
+$ curl http://127.0.0.1:3000/login -d username=username -d password=password
+Invalid credentials
+
+$ curl http://127.0.0.1:3000/login -d username=admin -d password=secret
+Login successful
+```
+
+
 #### JSON 请求体
+
+有时候我们直接 post JSON 的数据，我们可以通过 `jsonData` 来获取
 
 ```haskell
 {-# LANGUAGE DeriveGeneric #-}
@@ -249,83 +339,54 @@ import Data.Aeson
 import GHC.Generics
 
 data User = User
-    { userName :: Text
-    , userEmail :: Text
-    } deriving (Generic, Show)
+  { userName :: Text
+  , userEmail :: Text
+  } deriving (Generic, Show)
 
 instance FromJSON User
 instance ToJSON User
 
-post "/users" $ do
+  post "/users" $ do
     user <- jsonData :: ActionM User
     liftIO $ print user  -- 处理用户数据
     json user  -- 返回创建的用户
+
 ```
 
-#### 表单数据
+将代码添加到 routes 里面, 编译运行，然后 curl 测试:
 
-```haskell
-post "/login" $ do
-    username <- param "username"
-    password <- param "password"
-    -- 验证逻辑
-    if username == "admin" && password == "secret"
-        then text "Login successful"
-        else do
-            status status401
-            text "Invalid credentials"
+```bash
+$ curl http://127.0.0.1:3000/users -d '{"userName": "admin", "userEmail": "admin@test.com"}'
+{"userEmail":"admin@test.com","userName":"admin"}
 ```
 
 ### 2.4 文件上传
 
-```haskell
-{-# LANGUAGE OverloadedStrings #-}
-import Network.Wai.Parse (fileContent, fileName)
-import qualified Data.ByteString.Lazy as L
+当我们上传文件的时候可以用 `files` 来获取表单提交里面文件的内容.
 
-post "/upload" $ do
-    files <- files
-    case files of
-        [] -> text "No file uploaded"
-        ((fieldName, fileInfo):_) -> do
-            let content = fileContent fileInfo
-                name = fileName fileInfo
-            liftIO $ L.writeFile ("uploads/" ++ show name) content
-            text $ "File uploaded: " <> show name
+```haskell
+import           Network.Wai.Parse         (fileContent, fileName)
+import qualified Data.ByteString.Char8     as BC
+import qualified Data.ByteString.Lazy      as L
+
+  post "/upload" $ do
+      inFiles <- files
+      case inFiles of
+          [] -> text "No file uploaded"
+          ((_, fileInfo):_) -> do
+              let content = fileContent fileInfo
+                  name = fileName fileInfo
+              liftIO $ L.writeFile ("uploads/" ++ BC.unpack name) content
+              text $ "File uploaded: " <> pack (BC.unpack name)
 ```
 
-### 2.5 路由组织
+添加`bytestring`, `wai-extra` 到 package.yml 的 dependencies 上，
+将代码添加到 routes 里面, 编译运行，然后 curl 测试:
 
-将路由分组到不同模块：
-
-**src/Routes/Users.hs**
-```haskell
-{-# LANGUAGE OverloadedStrings #-}
-module Routes.Users (userRoutes) where
-
-import Web.Scotty
-
-userRoutes :: ScottyM ()
-userRoutes = do
-    get "/users" $ text "All users"
-    get "/users/:id" $ do
-        userId <- param "id"
-        text $ "User: " <> userId
-    post "/users" $ text "Create user"
+```bash
+$ curl http://127.0.0.1:3000/upload -F file=@README.md
+File uploaded: README.md
 ```
-
-**app/Main.hs**
-```haskell
-import Routes.Users (userRoutes)
-import Routes.Posts (postRoutes)
-
-main :: IO ()
-main = scotty 3000 $ do
-    userRoutes
-    postRoutes
-```
-
----
 
 ## 第3章：响应与中间件
 
